@@ -1,0 +1,56 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}My Issues - CityShine{% endblock %}
+
+{% block content %}
+<h2>My Reported Issues</h2>
+
+{% if issues %}
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Date Reported</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for issue in issues %}
+            <tr>
+                <td>{{ issue.title }}</td>
+                <td>{{ issue.issue_type.name }}</td>
+                <td>
+                    {% if issue.status == 'pending' %}
+                    <span class="badge bg-danger">Pending</span>
+                    {% elif issue.status == 'in_progress' %}
+                    <span class="badge bg-warning">In Progress</span>
+                    {% elif issue.status == 'resolved' %}
+                    <span class="badge bg-success">Resolved</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Closed</span>
+                    {% endif %}
+                </td>
+                <td>{{ issue.created_at|date:"M d, Y" }}</td>
+                <td>
+                    <a href="{% url 'issue_detail' issue.pk %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-eye"></i> View
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> You haven't reported any issues yet.
+</div>
+<a href="{% url 'create_issue' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Report an Issue
+</a>
+{% endif %}
+{% endblock %}

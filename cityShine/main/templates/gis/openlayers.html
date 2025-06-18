@@ -1,0 +1,181 @@
+{% load i18n %}
+<style type="text/css">
+    #{{ id }}_map { width: {{ map_width }}px; height: {{ map_height }}px; }
+    #{{ id }}_map .aligned label { float: inherit; }
+    #{{ id }}_div_map { position: relative; vertical-align: top; float: {{ LANGUAGE_BIDI|yesno:"right,left" }}; }
+    {% if not display_raw %}#{{ id }} { display: none; }{% endif %}
+    .olControlEditingToolbar .olControlModifyFeatureItemActive {
+        background-image: url("{% static "admin/img/gis/modifyfeature_on.png" %}");
+        background-repeat: no-repeat;
+    }
+    .olControlEditingToolbar .olControlModifyFeatureItemInactive {
+        background-image: url("{% static "admin/img/gis/modifyfeature_off.png" %}");
+        background-repeat: no-repeat;
+    }
+</style>
+
+<div id="{{ id }}_div_map">
+    <div id="{{ id }}_map"></div>
+    <span class="clear_features"><a href="javascript:{{ module }}.clearFeatures()">{% translate "Delete all Features" %}</a></span>
+    {% if display_raw %}<p>{% translate "Debugging window (serialized value)" %}</p>{% endif %}
+    <textarea id="{{ id }}" class="vSerializedField required" cols="150" rows="10" name="{{ name }}">{{ serialized }}</textarea>
+    <script type="text/javascript">
+        {% block map_options %}var options = {
+            geom_name: '{{ geom_type }}',
+            id: '{{ id }}',
+            map_id: '{{ id }}_map',
+            map_options: {{ map_options }},
+            map_srid: {{ map_srid }},
+            name: '{{ name }}',
+            default_lon: {{ default_lon }},
+            default_lat: {{ default_lat }},
+            default_zoom: {{ default_zoom }},
+            is_collection: {{ is_collection|yesno:"true,false" }},
+            is_linestring: {{ is_linestring|yesno:"true,false" }},
+            is_polygon: {{ is_polygon|yesno:"true,false" }},
+            is_point: {{ is_point|yesno:"true,false" }},
+            num_zoom: {{ num_zoom }},
+            max_zoom: {{ max_zoom }},
+            min_zoom: {{ min_zoom }},
+            units: '{{ units }}',
+            max_resolution: {{ max_resolution }},
+            max_extent: {{ max_extent }},
+            modifiable: {{ modifiable|yesno:"true,false" }},
+            mouse_position: {{ mouse_position|yesno:"true,false" }},
+            scale_text: {{ scale_text|yesno:"true,false" }},
+            layerswitcher: {{ layerswitcher|yesno:"true,false" }},
+            scrollable: {{ scrollable|yesno:"true,false" }},
+            display_raw: {{ display_raw|yesno:"true,false" }},
+            display_wkt: {{ display_wkt|yesno:"true,false" }},
+            display_srid: {{ display_srid|yesno:"true,false" }},
+            wms_url: '{{ wms_url }}',
+            wms_layer: '{{ wms_layer }}',
+            wms_name: '{{ wms_name }}',
+            wms_options: {{ wms_options }},
+            debug: {{ debug|yesno:"true,false" }}
+        };{% endblock %}
+        
+        // Create the map widget when the page is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Define the MapWidget constructor
+            function MapWidget(options) {
+                this.map = null;
+                this.controls = null;
+                this.panel = null;
+                this.layers = {};
+                this.wkt_f = new ol.format.WKT();
+                this.options = options;
+                this.map_div = document.getElementById(options.map_id);
+                this.map_srid = options.map_srid;
+                this.defaultCenter = [options.default_lon, options.default_lat];
+                
+                this.initMap();
+                this.addBaseLayer();
+                this.addControls();
+                this.addInteractions();
+                
+                if (options.serialized) {
+                    this.deserialize(options.serialized);
+                }
+            }
+            
+            MapWidget.prototype.initMap = function() {
+                this.map = new ol.Map({
+                    target: this.options.map_id,
+                    layers: [],
+                    view: new ol.View({
+                        center: ol.proj.fromLonLat(this.defaultCenter),
+                        zoom: this.options.default_zoom
+                    })
+                });
+            };
+            
+            MapWidget.prototype.addBaseLayer = function() {
+                this.layers.base = new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                });
+                this.map.addLayer(this.layers.base);
+            };
+            
+            MapWidget.prototype.addControls = function() {
+                this.map.addControl(new ol.control.Zoom());
+                this.map.addControl(new ol.control.ScaleLine());
+            };
+            
+            MapWidget.prototype.addInteractions = function() {
+                var self = this;
+                
+                // Vector layer for drawing
+                this.layers.vector = new ol.layer.Vector({
+                    source: new ol.source.Vector(),
+                    style: new ol.style.Style({
+                        fill: new ol.style.Fill({
+                            color: 'rgba(255, 255, 255, 0.2)'
+                        }),
+                        stroke: new ol.style.Stroke({
+                            color: '#ffcc33',
+                            width: 2
+                        }),
+                        image: new ol.style.Circle({
+                            radius: 7,
+                            fill: new ol.style.Fill({
+                                color: '#ffcc33'
+                            })
+                        })
+                    })
+                });
+                this.map.addLayer(this.layers.vector);
+                
+                // Add drawing interaction
+                if (this.options.is_point) {
+                    this.interaction = new ol.interaction.Draw({
+                        source: this.layers.vector.getSource(),
+                        type: 'Point'
+                    });
+                    
+                    this.interaction.on('drawend', function(evt) {
+                        // Clear previous features
+                        self.layers.vector.getSource().clear();
+                        
+                        // Add the new feature
+                        self.layers.vector.getSource().addFeature(evt.feature);
+                        
+                        // Update the textarea with the WKT
+                        var wkt = self.serialize(evt.feature);
+                        document.getElementById(self.options.id).value = wkt;
+                    });
+                    
+                    this.map.addInteraction(this.interaction);
+                }
+            };
+            
+            MapWidget.prototype.serialize = function(feature) {
+                var clone = feature.clone();
+                clone.getGeometry().transform('EPSG:3857', 'EPSG:4326');
+                return this.wkt_f.writeFeature(clone);
+            };
+            
+            MapWidget.prototype.deserialize = function(wkt) {
+                if (wkt) {
+                    var feature = this.wkt_f.readFeature(wkt);
+                    feature.getGeometry().transform('EPSG:4326', 'EPSG:3857');
+                    this.layers.vector.getSource().addFeature(feature);
+                    this.map.getView().fit(this.layers.vector.getSource().getExtent(), {
+                        maxZoom: 18
+                    });
+                }
+            };
+            
+            MapWidget.prototype.clearFeatures = function() {
+                this.layers.vector.getSource().clear();
+                document.getElementById(this.options.id).value = '';
+            };
+            
+            // Initialize the map widget
+            var geodjango_location = new MapWidget(options);
+            
+            // Make the widget available globally
+            window.{{ module }} = geodjango_location;
+        });
+    </script>
+</div>

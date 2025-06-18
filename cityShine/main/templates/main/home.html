@@ -1,0 +1,132 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Home - CityShine{% endblock %}
+
+{% block content %}
+<div class="jumbotron mb-4">
+    <h1 class="display-4">Welcome to CityShine</h1>
+    <p class="lead">Your platform for a brighter urban experience.</p>
+    <hr class="my-4">
+    <p>Discover services and opportunities in your city.</p>
+</div>
+
+{% if user.is_authenticated and user.profile.role == 'officer' %}
+<!-- Officer Dashboard Cards -->
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-speedometer2 text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Officer Dashboard</h5>
+                <p class="card-text">Access your officer dashboard to manage civic issues.</p>
+                <a href="{% url 'officer_dashboard' %}" class="btn btn-primary">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Analytics</h5>
+                <p class="card-text">View analytics and insights about civic issues.</p>
+                <a href="{% url 'analytics' %}" class="btn btn-success">View Analytics</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-map text-danger" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Issues Map</h5>
+                <p class="card-text">View and manage all reported issues on an interactive map.</p>
+                <a href="{% url 'officer_dashboard' %}" class="btn btn-danger">View Map</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif user.is_authenticated and user.profile.role == 'field_staff' %}
+<!-- Field Staff Dashboard Cards -->
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-speedometer2 text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Staff Dashboard</h5>
+                <p class="card-text">Access your field staff dashboard to manage civic issues.</p>
+                <a href="{% url 'field_staff_dashboard' %}" class="btn btn-primary">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-map text-success" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Issues Map</h5>
+                <p class="card-text">View and update all reported issues on an interactive map.</p>
+                <a href="{% url 'field_staff_dashboard' %}" class="btn btn-success">View Map</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-table text-danger" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Issues Table</h5>
+                <p class="card-text">Manage all reported issues in a tabular format.</p>
+                <a href="{% url 'field_staff_dashboard' %}?tab=table" class="btn btn-danger">View Table</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Regular User Cards -->
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-plus-circle text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Report New Issue</h5>
+                <p class="card-text">Report a civic issue in your area that needs attention.</p>
+                {% if user.is_authenticated %}
+                <a href="{% url 'create_issue' %}" class="btn btn-primary">Report Issue</a>
+                {% else %}
+                <a href="{% url 'login' %}" class="btn btn-primary">Login to Report</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-list-check text-success" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">My Reported Issues</h5>
+                <p class="card-text">View and track all the issues you have reported.</p>
+                {% if user.is_authenticated %}
+                <a href="{% url 'my_issues' %}" class="btn btn-success">View My Issues</a>
+                {% else %}
+                <a href="{% url 'login' %}" class="btn btn-success">Login to View</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-geo-alt-fill text-danger" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">Issues Map</h5>
+                <p class="card-text">Explore all reported issues on an interactive map.</p>
+                <a href="{% url 'issues_map' %}" class="btn btn-danger">View Map</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

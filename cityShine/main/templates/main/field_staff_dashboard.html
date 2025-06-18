@@ -1,0 +1,380 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Field Staff Dashboard - CityShine{% endblock %}
+
+{% block content %}
+<h2>Field Staff Dashboard</h2>
+
+<ul class="nav nav-tabs mb-4" id="dashboardTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="map-tab" data-bs-toggle="tab" data-bs-target="#map-view" type="button" role="tab" aria-controls="map-view" aria-selected="true">
+            <i class="bi bi-map"></i> Map View
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="table-tab" data-bs-toggle="tab" data-bs-target="#table-view" type="button" role="tab" aria-controls="table-view" aria-selected="false">
+            <i class="bi bi-table"></i> Table View
+        </button>
+    </li>
+</ul>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-funnel"></i> Filter Issues
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="issue_type" class="form-label">Issue Type</label>
+                <select name="issue_type" id="issue_type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for type in issue_types %}
+                    <option value="{{ type.id }}" {% if selected_type == type.id|stringformat:"i" %}selected{% endif %}>{{ type.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for status_value, status_name in status_choices %}
+                    <option value="{{ status_value }}" {% if selected_status == status_value %}selected{% endif %}>{{ status_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="date_from" class="form-label">From Date & Time</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from }}">
+                    <input type="time" class="form-control" id="time_from" name="time_from" value="{{ time_from }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label for="date_to" class="form-label">To Date & Time</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to }}">
+                    <input type="time" class="form-control" id="time_to" name="time_to" value="{{ time_to }}">
+                </div>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="{% url 'field_staff_dashboard' %}" class="btn btn-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="tab-content" id="dashboardTabContent">
+    <div class="tab-pane fade show active" id="map-view" role="tabpanel" aria-labelledby="map-tab">
+        <div id="map" style="width: 100%; height: 600px;"></div>
+    </div>
+    <div class="tab-pane fade" id="table-view" role="tabpanel" aria-labelledby="table-tab">
+        {% if issues %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Reported By</th>
+                        <th>Status</th>
+                        <th>Date Reported</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for issue in issues %}
+                    <tr>
+                        <td>{{ issue.title }}</td>
+                        <td>{{ issue.issue_type.name }}</td>
+                        <td>{{ issue.user.username }}</td>
+                        <td>
+                            <span class="badge bg-{{ issue.status|yesno:'success,warning,danger' }} status-badge-{{ issue.id }}">
+                                {{ issue.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ issue.created_at|date:"M d, Y" }}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Actions
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="{% url 'issue_detail' issue.pk %}"><i class="bi bi-eye"></i> View Details</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header">Update Status</h6></li>
+                                    {% for status_value, status_name in status_choices %}
+                                    <li><a class="dropdown-item update-status" href="#" data-issue-id="{{ issue.id }}" data-status="{{ status_value }}">{{ status_name }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No issues found matching the selected filters.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Status Update Modal -->
+<div class="modal fade" id="statusUpdateModal" tabindex="-1" aria-labelledby="statusUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="statusUpdateModalLabel">Update Issue Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="statusUpdateForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="modal-status" class="form-label">Status</label>
+                        <select class="form-select" id="modal-status" name="status">
+                            {% for status_value, status_name in status_choices %}
+                            <option value="{{ status_value }}">{{ status_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveStatusBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the map
+        var map = new ol.Map({
+            target: 'map',
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                })
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([78.9629, 20.5937]), // Center on India
+                zoom: 5
+            })
+        });
+        
+        // Create vector layer for the markers
+        var vectorSource = new ol.source.Vector();
+        var vectorLayer = new ol.layer.Vector({
+            source: vectorSource,
+            style: function(feature) {
+                return new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 8,
+                        fill: new ol.style.Fill({
+                            color: feature.get('status') === 'resolved' ? '#28a745' : 
+                                   feature.get('status') === 'in_progress' ? '#ffc107' : '#dc3545'
+                        }),
+                        stroke: new ol.style.Stroke({color: '#ffffff', width: 2})
+                    })
+                });
+            }
+        });
+        map.addLayer(vectorLayer);
+        
+        // Add markers for each issue
+        {% for issue in issues %}
+        {% if issue.location %}
+        var feature = new ol.Feature({
+            geometry: new ol.geom.Point(ol.proj.fromLonLat([{{ issue.location.x }}, {{ issue.location.y }}])),
+            title: "{{ issue.title }}",
+            type: "{{ issue.issue_type.name }}",
+            status: "{{ issue.status }}",
+            id: {{ issue.id }},
+            reporter: "{{ issue.user.username }}"
+        });
+        vectorSource.addFeature(feature);
+        {% endif %}
+        {% endfor %}
+        
+        // Add popup overlay
+        var container = document.createElement('div');
+        container.className = 'ol-popup';
+        
+        var popup = new ol.Overlay({
+            element: container,
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -10]
+        });
+        map.addOverlay(popup);
+        
+        // Add click interaction to show popup
+        map.on('click', function(evt) {
+            var feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+                return feature;
+            });
+            
+            if (feature) {
+                var coordinates = feature.getGeometry().getCoordinates();
+                popup.setPosition(coordinates);
+                
+                var statusClass = feature.get('status') === 'resolved' ? 'success' : 
+                                 feature.get('status') === 'in_progress' ? 'warning' : 'danger';
+                var statusDisplay = feature.get('status').replace('_', ' ').toUpperCase();
+                
+                var content = '<div class="card" style="width: 18rem;">' +
+                              '<div class="card-body">' +
+                              '<h5 class="card-title">' + feature.get('title') + '</h5>' +
+                              '<p class="card-text">Type: ' + feature.get('type') + '</p>' +
+                              '<p class="card-text">Reported by: ' + feature.get('reporter') + '</p>' +
+                              '<p class="card-text">Status: <span class="badge bg-' + statusClass + ' map-status-badge-' + feature.get('id') + '">' + statusDisplay + '</span></p>' +
+                              '<div class="d-flex justify-content-between">' +
+                              '<a href="/issues/' + feature.get('id') + '/" class="btn btn-primary btn-sm">View Details</a>' +
+                              '<button class="btn btn-warning btn-sm map-update-status" data-issue-id="' + feature.get('id') + '">Update Status</button>' +
+                              '</div></div></div>';
+                
+                container.innerHTML = content;
+                container.style.display = 'block';
+                
+                // Add event listener to the update status button
+                setTimeout(function() {
+                    var updateBtn = container.querySelector('.map-update-status');
+                    if (updateBtn) {
+                        updateBtn.addEventListener('click', function() {
+                            var issueId = this.getAttribute('data-issue-id');
+                            showStatusUpdateModal(issueId);
+                        });
+                    }
+                }, 100);
+            } else {
+                container.style.display = 'none';
+            }
+        });
+        
+        // Change cursor style when hovering over a feature
+        map.on('pointermove', function(e) {
+            if (e.dragging) return;
+            
+            var pixel = map.getEventPixel(e.originalEvent);
+            var hit = map.hasFeatureAtPixel(pixel);
+            
+            map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+        });
+        
+        // Fit map to features if there are any
+        if (vectorSource.getFeatures().length > 0) {
+            map.getView().fit(vectorSource.getExtent(), {
+                padding: [50, 50, 50, 50],
+                maxZoom: 15
+            });
+        }
+        
+        // Status update functionality
+        var currentIssueId = null;
+        var statusUpdateModal = new bootstrap.Modal(document.getElementById('statusUpdateModal'));
+        
+        function showStatusUpdateModal(issueId) {
+            currentIssueId = issueId;
+            statusUpdateModal.show();
+        }
+        
+        // Table view status update
+        document.querySelectorAll('.update-status').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var issueId = this.getAttribute('data-issue-id');
+                var status = this.getAttribute('data-status');
+                
+                // Set the selected status in the modal
+                document.getElementById('modal-status').value = status;
+                
+                showStatusUpdateModal(issueId);
+            });
+        });
+        
+        // Save status button
+        document.getElementById('saveStatusBtn').addEventListener('click', function() {
+            if (!currentIssueId) return;
+            
+            var status = document.getElementById('modal-status').value;
+            var formData = new FormData();
+            formData.append('status', status);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            
+            fetch('/issues/' + currentIssueId + '/update-status/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the status badge in the table view
+                    var statusBadge = document.querySelector('.status-badge-' + currentIssueId);
+                    if (statusBadge) {
+                        statusBadge.textContent = data.display_status;
+                        statusBadge.className = 'badge bg-' + (data.new_status === 'resolved' ? 'success' : 
+                                                              data.new_status === 'in_progress' ? 'warning' : 'danger') +
+                                                ' status-badge-' + currentIssueId;
+                    }
+                    
+                    // Update the status badge in the map popup
+                    var mapStatusBadge = document.querySelector('.map-status-badge-' + currentIssueId);
+                    if (mapStatusBadge) {
+                        mapStatusBadge.textContent = data.display_status;
+                        mapStatusBadge.className = 'badge bg-' + (data.new_status === 'resolved' ? 'success' : 
+                                                                 data.new_status === 'in_progress' ? 'warning' : 'danger') +
+                                                   ' map-status-badge-' + currentIssueId;
+                    }
+                    
+                    // Update the feature in the vector source
+                    var features = vectorSource.getFeatures();
+                    for (var i = 0; i < features.length; i++) {
+                        if (features[i].get('id') == currentIssueId) {
+                            features[i].set('status', data.new_status);
+                            break;
+                        }
+                    }
+                    
+                    // Refresh the vector layer
+                    vectorLayer.changed();
+                    
+                    // Show success message
+                    alert('Status updated successfully!');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+                
+                // Close the modal
+                statusUpdateModal.hide();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the status.');
+                statusUpdateModal.hide();
+            });
+        });
+    });
+</script>
+
+<style>
+    .ol-popup {
+        position: absolute;
+        background-color: white;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #cccccc;
+        bottom: 12px;
+        left: -50px;
+        min-width: 280px;
+        display: none;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Issues Map - CityShine{% endblock %}
+
+{% block content %}
+<h2>All Reported Issues Map</h2>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-funnel"></i> Filter Issues
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="issue_type" class="form-label">Issue Type</label>
+                <select name="issue_type" id="issue_type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for type in issue_types %}
+                    <option value="{{ type.id }}" {% if selected_type == type.id|stringformat:"i" %}selected{% endif %}>{{ type.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for status_value, status_name in status_choices %}
+                    <option value="{{ status_value }}" {% if selected_status == status_value %}selected{% endif %}>{{ status_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="date_from" class="form-label">From Date & Time</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from }}">
+                    <input type="time" class="form-control" id="time_from" name="time_from" value="{{ time_from }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label for="date_to" class="form-label">To Date & Time</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to }}">
+                    <input type="time" class="form-control" id="time_to" name="time_to" value="{{ time_to }}">
+                </div>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="{% url 'issues_map' %}" class="btn btn-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="map" style="width: 100%; height: 600px;"></div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the map
+        var map = new ol.Map({
+            target: 'map',
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                })
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([78.9629, 20.5937]), // Center on India
+                zoom: 5
+            })
+        });
+        
+        // Create vector layer for the markers
+        var vectorSource = new ol.source.Vector();
+        var vectorLayer = new ol.layer.Vector({
+            source: vectorSource,
+            style: function(feature) {
+                return new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 8,
+                        fill: new ol.style.Fill({
+                            color: feature.get('status') === 'resolved' ? '#28a745' : 
+                                   feature.get('status') === 'in_progress' ? '#ffc107' : '#dc3545'
+                        }),
+                        stroke: new ol.style.Stroke({color: '#ffffff', width: 2})
+                    })
+                });
+            }
+        });
+        map.addLayer(vectorLayer);
+        
+        // Add markers for each issue
+        {% for issue in issues %}
+        {% if issue.location %}
+        var feature = new ol.Feature({
+            geometry: new ol.geom.Point(ol.proj.fromLonLat([{{ issue.location.x }}, {{ issue.location.y }}])),
+            title: "{{ issue.title }}",
+            type: "{{ issue.issue_type.name }}",
+            status: "{{ issue.status }}",
+            id: {{ issue.id }}
+        });
+        vectorSource.addFeature(feature);
+        {% endif %}
+        {% endfor %}
+        
+        // Add popup overlay
+        var container = document.createElement('div');
+        container.className = 'ol-popup';
+        
+        var popup = new ol.Overlay({
+            element: container,
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -10]
+        });
+        map.addOverlay(popup);
+        
+        // Add click interaction to show popup
+        map.on('click', function(evt) {
+            var feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+                return feature;
+            });
+            
+            if (feature) {
+                var coordinates = feature.getGeometry().getCoordinates();
+                popup.setPosition(coordinates);
+                
+                var statusClass = feature.get('status') === 'resolved' ? 'success' : 
+                                 feature.get('status') === 'in_progress' ? 'warning' : 'danger';
+                var statusDisplay = feature.get('status').replace('_', ' ').toUpperCase();
+                
+                var content = '<div class="card" style="width: 18rem;">' +
+                              '<div class="card-body">' +
+                              '<h5 class="card-title">' + feature.get('title') + '</h5>' +
+                              '<p class="card-text">Type: ' + feature.get('type') + '</p>' +
+                              '<p class="card-text">Status: <span class="badge bg-' + statusClass + '">' + statusDisplay + '</span></p>' +
+                              '<a href="/issues/' + feature.get('id') + '/" class="btn btn-primary btn-sm">View Details</a>' +
+                              '</div></div>';
+                
+                container.innerHTML = content;
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        });
+        
+        // Change cursor style when hovering over a feature
+        map.on('pointermove', function(e) {
+            if (e.dragging) return;
+            
+            var pixel = map.getEventPixel(e.originalEvent);
+            var hit = map.hasFeatureAtPixel(pixel);
+            
+            map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+        });
+        
+        // Fit map to features if there are any
+        if (vectorSource.getFeatures().length > 0) {
+            map.getView().fit(vectorSource.getExtent(), {
+                padding: [50, 50, 50, 50],
+                maxZoom: 15
+            });
+        }
+    });
+</script>
+
+<style>
+    .ol-popup {
+        position: absolute;
+        background-color: white;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #cccccc;
+        bottom: 12px;
+        left: -50px;
+        min-width: 280px;
+        display: none;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}{{ issue.title }} - CityShine{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>{{ issue.title }}</h2>
+        <p class="text-muted">
+            Reported by {{ issue.user.username }} on {{ issue.created_at|date:"F j, Y" }}
+        </p>
+        <div class="badge bg-{{ issue.status|yesno:'success,warning,danger' }} mb-3">{{ issue.get_status_display }}</div>
+        <p><strong>Type:</strong> {{ issue.issue_type.name }}</p>
+        
+        {% if issue.description %}
+        <h4>Description</h4>
+        <p>{{ issue.description }}</p>
+        {% endif %}
+        
+        {% if issue.photo %}
+        <h4>Photo</h4>
+        <img src="{{ issue.photo.url }}" alt="{{ issue.title }}" class="img-fluid mb-3">
+        {% endif %}
+        
+        <h4>Location</h4>
+        <div id="map" style="width: 100%; height: 400px;"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the map
+        var map = new ol.Map({
+            target: 'map',
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                })
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([0, 0]),
+                zoom: 2
+            })
+        });
+        
+        // Create vector layer for the marker
+        var vectorSource = new ol.source.Vector();
+        var vectorLayer = new ol.layer.Vector({
+            source: vectorSource,
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 8,
+                    fill: new ol.style.Fill({color: '#ff0000'}),
+                    stroke: new ol.style.Stroke({color: '#ffffff', width: 2})
+                })
+            })
+        });
+        map.addLayer(vectorLayer);
+        
+        {% if issue.location %}
+        // Get coordinates from the issue
+        var longitude = {{ issue.location.x }};
+        var latitude = {{ issue.location.y }};
+        var coordinates = ol.proj.fromLonLat([longitude, latitude]);
+        
+        // Add marker
+        var feature = new ol.Feature({
+            geometry: new ol.geom.Point(coordinates)
+        });
+        vectorSource.addFeature(feature);
+        
+        // Center map on marker
+        map.getView().setCenter(coordinates);
+        map.getView().setZoom(15);
+        {% endif %}
+    });
+</script>
+{% endblock %}
